@@ -5,10 +5,10 @@
 
 (enable-console-print!)
 
-(defonce app-state (atom {:boardsize 50 :cells {}}))
+(defonce app-state (atom {:boardsize 50 :cells {} :generation 0}))
 
 (defonce running? false)
-(js/setInterval (fn [] (when running? (swap! app-state assoc :cells (playround @app-state)))), 100)
+(defonce time 0)
 
 (defn left? [cell boardsize]
   (> cell boardsize))
@@ -61,21 +61,47 @@
       (dom/div {:style {:flex-direction "column" :background-color "yellow"}}
              (map #(om/build cell (assoc data :cell (+ f %))) r)))))
 
+(def header-css {:font-size 20 :color "black" :background-color "#AAAAAA" :padding "2px"})
+
 (defcomponent board [data owner]
   (render-state [_ _]
-    (let [r (range 0 (:boardsize data))]
-    (dom/div {:style {:display "flex" :flex-direction "row" :border "1px black solid"}}
-             (map #(om/build row (assoc data :row %)) r)))))
-
-(defcomponent view [data owner]
-  (render-state [_ _]
-    (dom/div {:style {:display "flex"}}
-    (dom/div {:style {:border "1px black solid" :flex-direction "row"}}
-             (dom/div {:style {:font-size 20 :color "black" :background-color "grey"}} "Conways life")
-             (om/build board data)
+    (dom/div
+    (dom/div {:style {:display "flex" :flex-direction "column"}}
+             (dom/div {:style header-css} "Conways life")
+             (let [r (range 0 (:boardsize data))]
+               (dom/div {:style {:display "flex" :flex-direction "row" :border "1px black solid"}}
+                        (map #(om/build row (assoc data :row %)) r))))
+    (dom/div {:style {:display "flex" :flex-direction "row"}}
              (dom/div {} (dom/button {:onClick (fn [_] (set! running? true))}"spil"))
              (dom/div {} (dom/button {:onClick (fn [_] (set! running? false))}"stop"))))))
 
+(defcomponent stats [data owner]
+  (render-state [_ _]
+    (dom/div {:style {:display "flex" :flex-direction "column"}}
+             (dom/div {:style header-css} "Game stats")
+             (dom/div {:style {:padding "2px"}}
+             (dom/table {:style {:width "100%"}}
+               (dom/tr
+                 (dom/td "Live cells")(dom/td (count (data :cells))))
+               (dom/tr
+                 (dom/td "Generation")(dom/td (data :generation)))
+               dom/tr
+               (dom/td "Cycle time")(dom/td (count (data :cells))))))))
+
+(defcomponent view [data owner]
+  (render-state [_ _]
+    ()
+    (dom/div {:style {:display "flex" }}
+    (dom/div {:style {:border "1px black solid" :background-color "#CCCCCC" :display "flex" :flex-direction "row"}}
+             (om/build board data)
+             (om/build stats data))
+             )))
+
 (om/root view app-state
          {:target (. js/document (getElementById "app"))})
+
+(defn next-state [s]
+  (assoc s :cells (playround s) :generation (inc (:generation s))))
+
+(js/setInterval (fn [] (when running? (swap! app-state next-state))), 20)
 
