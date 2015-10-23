@@ -1,14 +1,14 @@
 (ns ^:figwheel-always conway.core
   (:require     [om-tools.core :refer-macros [defcomponent]]
                 [om.core :as om :include-macros true]
-                [om-tools.dom :as dom :include-macros true]))
+                [om-tools.dom :as dom :include-macros true]
+                [cljs-time.core :as tt]))
 
 (enable-console-print!)
 
-(defonce app-state (atom {:boardsize 50 :cells {} :generation 0}))
+(defonce app-state (atom {:boardsize 20 :cells {} :generation 0 :latest 0 :avg 0 :cycle 0}))
 
 (defonce running? false)
-(defonce time 0)
 
 (defn left? [cell boardsize]
   (> cell boardsize))
@@ -46,7 +46,7 @@
         cells (:cells data)]
   (zipmap (filter #(alive? % cells board) (range 0 (* board board))) (repeat true))))
 
-(defcomponent cell [data owner]
+(defcomponent cell [data _]
   (render-state [_ _]
     (let [{:keys [cell cells]} data
           color (if (cells cell) "red" "black")]
@@ -54,7 +54,7 @@
               :onClick (fn [_] (swap! app-state assoc-in [:cells cell] true))}
              ""))))
 
-(defcomponent row [data owner]
+(defcomponent row [data _]
   (render-state [_ _]
     (let [r (range 0 (:boardsize data))
           f (* (:boardsize data) (:row data))]
@@ -63,7 +63,20 @@
 
 (def header-css {:font-size 20 :color "black" :background-color "#AAAAAA" :padding "2px"})
 
-(defcomponent board [data owner]
+(defn calc-avg [oldavg cycle nextgen]
+  (let [new-avg (if (= 0 nextgen) cycle (quot (+ (* oldavg (dec nextgen)) cycle) nextgen))]
+    (prn oldavg cycle nextgen new-avg)
+    new-avg))
+
+(defn next-state [s]
+  (let [nextgen (inc (:generation s))
+        oldavg (:avg s)
+        now (tt/now)
+        cycle (tt/in-millis (tt/interval (:latest s) now))
+        avg (calc-avg oldavg cycle nextgen)]
+  (assoc s :cells (playround s) :generation nextgen :latest now :avg avg :cycle cycle)))
+
+(defcomponent board [data _]
   (render-state [_ _]
     (dom/div
     (dom/div {:style {:display "flex" :flex-direction "column"}}
@@ -72,8 +85,13 @@
                (dom/div {:style {:display "flex" :flex-direction "row" :border "1px black solid"}}
                         (map #(om/build row (assoc data :row %)) r))))
     (dom/div {:style {:display "flex" :flex-direction "row"}}
-             (dom/div {} (dom/button {:onClick (fn [_] (set! running? true))}"spil"))
-             (dom/div {} (dom/button {:onClick (fn [_] (set! running? false))}"stop"))))))
+             (dom/div {} (dom/button {:onClick (fn [_] (do
+                                                         (set! running? true)
+                                                         (swap! app-state assoc :latest (tt/now))))}"spil"))
+             (dom/div {} (dom/button {:onClick (fn [_] (set! running? false))}"stop"))
+             (dom/div {} (dom/button {:onClick (fn [_] (doall
+                                                         (swap! app-state assoc :latest (tt/now))
+                                                         (swap! app-state next-state)))}"step"))))))
 
 (defcomponent stats [data owner]
   (render-state [_ _]
@@ -85,23 +103,21 @@
                  (dom/td "Live cells")(dom/td (count (data :cells))))
                (dom/tr
                  (dom/td "Generation")(dom/td (data :generation)))
-               dom/tr
-               (dom/td "Cycle time")(dom/td (count (data :cells))))))))
+               (dom/tr
+                 (dom/td "Avg framerate")(dom/td (data :avg)))
+               (dom/tr
+                 (dom/td "current framerate")(dom/td (data :cycle))))))))
 
 (defcomponent view [data owner]
   (render-state [_ _]
-    ()
     (dom/div {:style {:display "flex" }}
-    (dom/div {:style {:border "1px black solid" :background-color "#CCCCCC" :display "flex" :flex-direction "row"}}
-             (om/build board data)
-             (om/build stats data))
-             )))
+             (dom/div {:style {:border "1px black solid" :background-color "#CCCCCC" :display "flex" :flex-direction "row"}}
+                      (om/build board data)
+                      (om/build stats data)))))
 
 (om/root view app-state
          {:target (. js/document (getElementById "app"))})
 
-(defn next-state [s]
-  (assoc s :cells (playround s) :generation (inc (:generation s))))
 
-(js/setInterval (fn [] (when running? (swap! app-state next-state))), 20)
+(js/setInterval (fn [] (when running? (swap! app-state next-state))), 0)
 

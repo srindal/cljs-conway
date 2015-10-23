@@ -8,7 +8,8 @@
                  [org.clojure/clojurescript "1.7.122"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [org.omcljs/om "0.9.0"]
-                 [prismatic/om-tools "0.3.12"]]
+                 [prismatic/om-tools "0.3.12"]
+                 [com.andrewmcveigh/cljs-time "0.3.14"]]
 
   :plugins [[lein-cljsbuild "1.1.0"]
             [lein-figwheel "0.4.0"]]
